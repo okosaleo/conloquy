@@ -4,11 +4,15 @@ import {z} from "zod";
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormDescription, FormField, FormLabel, FormMessage, FormItem } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormLabel, FormMessage, FormItem } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-import { OctagonAlertIcon } from "lucide-react";
+import { Loader2, OctagonAlertIcon } from "lucide-react";
 import Link from "next/link";
+import { authClient } from "@/lib/auth-client";
+import { useState } from "react";
+import { toast } from 'sonner';
+import { useRouter } from "next/navigation";
 
 
 const formSchema = z.object({
@@ -17,6 +21,9 @@ const formSchema = z.object({
 });
 
 export default function SignInView() {
+    const router = useRouter();
+    const [error, setError] = useState<string | null>(null);
+    const [pending, setPending] = useState(false);
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -24,6 +31,50 @@ export default function SignInView() {
             password: "",
         },
     });
+
+
+    const onSubmit = (data: z.infer<typeof formSchema>) => {
+        setPending(true);
+        setError(null);
+     authClient.signIn.email({
+            email: data.email,
+            password: data.password,
+            callbackURL: "/",
+        },
+    {
+        onSuccess: () => {
+            setPending(false);
+            router.push("/");
+            toast.success("Welcome Back User",{ description: "Sign in successful!"});
+        },
+         onError: ({error}) => {
+            toast.error(error.message);
+            setError(error.message);
+        }
+    },
+);
+    }
+
+    const onSocial = (provider: "github" | "google") => {
+            setPending(true);
+            setError(null);
+         authClient.signIn.social({
+               provider: provider,
+               callbackURL: "/",
+            },
+        {
+            onSuccess: () => {
+                setPending(false);
+                toast.success("Account Created",{ description: "Sign up successful!"});
+            },
+             onError: ({error}) => {
+                setPending(false);
+                toast.error(error.message);
+                setError(error.message);
+            }
+        },
+    );
+        }
   return (
      <div className="flex flex-col items-center justify-center lg:w-1/2 w-full">
             <div className="flex flex-col items-center justify-center">
@@ -34,7 +85,7 @@ export default function SignInView() {
             </div>
             <div className="lg:w-1/2 lg:p-0 w-full p-6">
                 <Form {...form}>
-                    <form className="py-6 md:py-8 flex flex-col gap-4" >
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="py-6 md:py-8 flex flex-col gap-4" >
                         <div className="flex flex-col gap-3">
                             <FormField
                                 control={form.control}
@@ -61,30 +112,42 @@ export default function SignInView() {
                                     </FormItem>
                                 )} />
                         </div>
-                        {true && (
+                        {!!error && (
                             <Alert className="bg-destructive/10 border-none">
                                 <OctagonAlertIcon className="h-4 w-4 !text-destructive" />
-                                <AlertTitle>Error</AlertTitle>
+                                <AlertTitle>{error}</AlertTitle>
                             </Alert>
                         )}
-                        <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
-                            Sign In
+                        <Button disabled={pending} type="submit" className="w-full bg-primary hover:bg-primary/90">
+                        {pending ? (
+                            <p className="flex items-center justify-center">
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Signing In...
+                            </p>) 
+                            : ("Sign In")}
                         </Button>
                         <div className="after:border-border relative text-center text-sm after:absolute after:top-1/2 after:inset-0 after:flex after:items-center after:border-t">
                             <span className="bg-card px-2 z-10 relative text-muted-foreground">Or continue with</span>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <Button variant="outline" type="button" className="w-full">
+                            <Button 
+                             onClick={() => onSocial("google")}
+                            disabled={pending} variant="outline" type="button" className="w-full">
                                 <Image src="/google.svg" alt="Google" width={20} height={20} className="mr-2" />
                                 Google
                             </Button>
-                            <Button variant="outline" type="button" className="w-full">
+                            <Button 
+                            onClick={() => onSocial("github")}
+                             disabled={pending}
+                             variant="outline"
+                             type="button" className="w-full">
                                 <Image src="/Github.svg" alt="GitHub" width={20} height={20} className="mr-2" />
                                 GitHub
                             </Button>
                         </div>
                         <div className="text-center text-sm">
-                            Don&apos;t have an account?{" "}<Link href="/auth/sign-up" className="underline underline-offset-4">Sign up </Link></div>
+                            Don&apos;t have an account?{" "}<Link href="/sign-up" className="underline underline-offset-4">Sign up </Link></div>
+                            <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">By clicking continue, you agree to our <a href="#">Terms of Service</a> and <a>Privacy Policy</a></div>
                     </form>
                 </Form>
             </div>
