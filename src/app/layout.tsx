@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Parkinsans } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "@/components/ui/sonner"
 
 const parkinsans = Parkinsans({
   subsets: ["latin"],
@@ -22,6 +23,7 @@ export default function RootLayout({
         className={`${parkinsans.className} antialiased`}
       >
         {children}
+        <Toaster richColors position="top-center" />
       </body>
     </html>
   );
