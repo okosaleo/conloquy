@@ -50,6 +50,7 @@ export default function SignInView() {
          onError: ({error}) => {
             toast.error(error.message);
             setError(error.message);
+            setPending(false)
         }
     },
 );

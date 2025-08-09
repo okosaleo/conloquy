@@ -12,7 +12,7 @@ export default function HomeView() {
   if(!session) { 
     return (
       <div className="flex flex-col p-4 gap-y-4">
-        <p>You are not logged in.</p>
+        <p>You are not logged in. 🛌 Tips to Recover Faster</p>
         <Button asChild>
           <Link href="/sign-up">Sign Up</Link>
         </Button>
@@ -24,7 +24,7 @@ export default function HomeView() {
   }
   return (
     <div className="flex flex-col p-4 gap-y-4">
-      <p>Logged in as {session?.user.name}</p>
+      <p>Logged in as {session?.user.name}.</p>
       <Button onClick={() => authClient.signOut({fetchOptions: {onSuccess: () => router.push("/sign-in")}})}>
         Sign Out
       </Button>

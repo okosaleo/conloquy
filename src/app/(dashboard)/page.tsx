@@ -10,7 +10,7 @@ export default async function Home() {
   });
 
   if (!session) {
-    redirect("/auth/sign-in");
+    redirect("/sign-in");
   }
   return (
     <HomeView />
