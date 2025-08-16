@@ -66,7 +66,6 @@ export default function SignInView() {
         {
             onSuccess: () => {
                 setPending(false);
-                toast.success("Account Created",{ description: "Sign up successful!"});
             },
              onError: ({error}) => {
                 setPending(false);
