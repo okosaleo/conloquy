@@ -3,6 +3,7 @@ import { Parkinsans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { TRPCReactProvider } from "@/trpc/client";
+import { NuqsAdapter} from "nuqs/adapters/next";
 
 const parkinsans = Parkinsans({
   subsets: ["latin"],
@@ -19,6 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    <NuqsAdapter>
     <TRPCReactProvider>
     <html lang="en">
       <body
@@ -29,5 +31,6 @@ export default function RootLayout({
       </body>
     </html>
     </TRPCReactProvider>
+    </NuqsAdapter>
   );
 }
