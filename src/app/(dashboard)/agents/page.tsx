@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth';
 import AgentsListHeader from '@/modules/agents/ui/components/agents-list-header';
-import { AgentView, AgentViewLoading } from '@/modules/agents/ui/views/agents-view'
+import { AgentView, AgentViewError, AgentViewLoading } from '@/modules/agents/ui/views/agents-view'
 import { getQueryClient, trpc } from '@/trpc/server'
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import { headers } from 'next/headers';
@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation';
 import type { SearchParams } from 'nuqs';
 import React, { Suspense } from 'react'
 import { loadSearchParams } from '@/modules/agents/params';
+import { ErrorBoundary } from "react-error-boundary";
 
 interface Props {
   searchParams: Promise<SearchParams>;
@@ -31,7 +32,9 @@ export default async function Agents({ searchParams }: Props) {
     <AgentsListHeader />
     <HydrationBoundary state={dehydrate(queryClient)}>
       <Suspense fallback={<AgentViewLoading />}>
+      <ErrorBoundary fallback={<AgentViewError />}>
       <AgentView />
+      </ErrorBoundary>
       </Suspense>
     </HydrationBoundary>
     </>
