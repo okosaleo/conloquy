@@ -17,7 +17,7 @@ export default function NewMeetingDialog({open, onOpenChange}: NewAgentDialogPro
      >
       <MeetingForm
       onSuccess={(id) => {onOpenChange(false); router.push(`/meetings/${id}`)}}
-      onCancel={() => onOpenChange}
+      onCancel={() => onOpenChange(false)}
        />
     </ResponsiveDialog>
   )
