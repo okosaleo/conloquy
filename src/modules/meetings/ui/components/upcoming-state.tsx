@@ -29,7 +29,7 @@ export default function UpcomingState({meetingId, onCancelMeeting, isCancelling}
              className="w-full lg:w-auto"
              disabled={isCancelling}
              >
-                <Link href={`/call/${123}`}>
+                <Link href={`/call/${meetingId}`}>
                 <VideoIcon />
                 Start Meeting
                 </Link>
