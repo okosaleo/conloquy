@@ -57,10 +57,17 @@ export default function MeetingForm({
                await queryClient.invalidateQueries(
                     trpc.meetings.getMany.queryOptions({}),
                 );
+                 await queryClient.invalidateQueries(
+                    trpc.premium.getFreeUsage.queryOptions(),
+                );
                 onSuccess?.(data.id);
             },
             onError: (error) => {
                 toast.error(error.message)
+
+                 if(error.data?.code === "FORBIDDEN") {
+                      router.push("/upgrade")
+                  }
             },
         }),
     )
@@ -137,7 +144,7 @@ export default function MeetingForm({
                                 <div className="flex iytems-center gap-x-2">
                                     <GeneratedAvatar
                                     seed={agent.name}
-                                    variant="botttsNeutral"
+                                    variant="openPeeps"
                                     className="border size-6"
                                     />
                                     <span>{agent.name}</span>

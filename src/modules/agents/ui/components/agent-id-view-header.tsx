@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronRightIcon, MoreVerticalIcon, PencilIcon, TrashIcon } from "lucide-react";
 import Link from "next/link";
-import { Chevron } from "react-day-picker";
 
 interface Props {
     agentId: string;

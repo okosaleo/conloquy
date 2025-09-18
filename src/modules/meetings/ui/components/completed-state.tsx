@@ -10,6 +10,8 @@ import GeneratedAvatar from '@/components/generated-avatar';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { formatDuration } from '@/lib/utils';
+import Transcript from './transcript';
+import { ChatProvider } from './chat-provider';
 
 interface Props {
     data: MeetingGetOne;
@@ -73,7 +75,7 @@ export default function CompletedState({data}: Props) {
                           <div className='flex gap-x-2 items-center'>
                         <Link href={`/agents/${data.agentId}`} className='flex items-center gap-x-2 underline underline-offset-4 capitalize'>
                         <GeneratedAvatar 
-                        variant='botttsNeutral'
+                        variant='openPeeps'
                         seed={data.agent.name}
                         className='size-5'
                          />
@@ -129,6 +131,12 @@ export default function CompletedState({data}: Props) {
                 </div>
                   
                 </div>
+            </TabsContent>
+            <TabsContent value="transcript">
+                <Transcript meetingId={data.id} />
+            </TabsContent>
+            <TabsContent value="chat">
+                <ChatProvider meetingId={data.id} meetingName={data.name} />
             </TabsContent>
         </Tabs>
     </div>

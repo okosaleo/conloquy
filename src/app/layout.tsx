@@ -7,6 +7,7 @@ import { NuqsAdapter} from "nuqs/adapters/next";
 
 const parkinsans = Parkinsans({
   subsets: ["latin"],
+  display: "block"
 });
 
 export const metadata: Metadata = {

@@ -11,7 +11,7 @@ export const LoadingState = ({
     description
 }: Props) => {
     return (
-        <div className="py-4 px-8 flex flex-1 items-center justify-center ">
+        <div className="py-4 px-8 flex flex-1 items-center justify-center bg-white">
             <div className="flex flex-col items-center justify-center gap-y-6 p-4 rounded-lg">
                <DotLottieReact
         src="/loading.lottie"

@@ -30,7 +30,7 @@ export default function AgentIdFilter() {
             <div className="flex items-center gap-x-2">
                 <GeneratedAvatar
                 seed={agent.name}
-                variant="botttsNeutral"
+                variant="openPeeps"
                 className="size-4"
                 />
                 {agent.name}

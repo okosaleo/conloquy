@@ -43,10 +43,17 @@ export default function AgentForm({
                await queryClient.invalidateQueries(
                     trpc.agents.getMany.queryOptions({}),
                 );
+                await queryClient.invalidateQueries(
+                    trpc.premium.getFreeUsage.queryOptions(),
+                );
                 onSuccess?.();
             },
             onError: (error) => {
                 toast.error(error.message)
+
+                if(error.data?.code === "FORBIDDEN") {
+                    router.push("/upgrade")
+                }
             },
         }),
     )
@@ -94,7 +101,7 @@ export default function AgentForm({
         <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
             <GeneratedAvatar
             seed={form.watch("name")}
-            variant="botttsNeutral"
+            variant="openPeeps"
             className="border size-16"
              />
              <FormField

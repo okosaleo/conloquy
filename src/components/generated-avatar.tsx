@@ -1,12 +1,12 @@
 import { createAvatar } from "@dicebear/core";
-import {botttsNeutral, initials} from '@dicebear/collection'
+import {openPeeps, initials} from '@dicebear/collection'
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { cn } from "@/lib/utils";
 
 interface GeneratedAvatarProps {
     seed:string;
     className?: string;
-    variant: "botttsNeutral" | 'initials';
+    variant: "openPeeps" | 'initials';
 }
 export default function GeneratedAvatar({
     seed,
@@ -15,8 +15,8 @@ export default function GeneratedAvatar({
 }: GeneratedAvatarProps) {
     let avatar;
 
-    if(variant === 'botttsNeutral') {
-        avatar = createAvatar(botttsNeutral, {
+    if(variant === 'openPeeps') {
+        avatar = createAvatar(openPeeps, {
             seed
         })
     } else {

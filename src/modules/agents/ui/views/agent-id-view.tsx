@@ -32,6 +32,9 @@ export default function AgentIdView({ agentId }: Props) {
         trpc.agents.remove.mutationOptions({
             onSuccess: async () => {
               await  queryClient.invalidateQueries(trpc.agents.getMany.queryOptions({}));
+               await queryClient.invalidateQueries(
+                    trpc.premium.getFreeUsage.queryOptions(),
+                );
                 router.push('/agents');
             },
             onError: (error) => {
@@ -71,7 +74,7 @@ export default function AgentIdView({ agentId }: Props) {
             <div className="px-4 py-5 gap-y-4 flex flex-col col-span-5">
                 <div className="flex items-center gap-x-3">
                     <GeneratedAvatar
-                     variant="botttsNeutral"
+                     variant="openPeeps"
                      seed={data.name}
                      className="size-10"
                      />
