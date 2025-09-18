@@ -75,7 +75,7 @@ export const meetingsRouter = createTRPCRouter({
             agents.map((agent) => ({
                 ...agent,
             image:
-            generateAvatarUrl({seed: agent.name, variant: "botttsNeutral"}),
+            generateAvatarUrl({seed: agent.name, variant: "openPeeps"}),
             })))
 
 
@@ -224,7 +224,7 @@ export const meetingsRouter = createTRPCRouter({
                 role: "user",
                 image: generateAvatarUrl({
                     seed: existingAgent.name,
-                    variant: "botttsNeutral",
+                    variant: "openPeeps",
                 }),
              },
             ]);
