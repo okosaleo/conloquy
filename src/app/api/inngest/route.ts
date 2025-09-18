@@ -8,4 +8,5 @@ export const { GET, POST, PUT } = serve({
   functions: [
     meetingsProcessing
   ],
+  signingKey: process.env.INNGEST_SIGNING_KEY,
 });
