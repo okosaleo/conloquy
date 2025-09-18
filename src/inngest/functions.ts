@@ -6,7 +6,6 @@ import { StreamTranscriptItem } from "@/modules/meetings/types";
 import { eq, inArray } from "drizzle-orm";
 import JSONL from "jsonl-parse-stringify";
 
-
 const summarizer = createAgent({
   name: "summarizer",
   system: `You are an expert summarizer. You write readable, concise, simple content. You are given a transcript of a meeting and you need to summarize it.
@@ -85,21 +84,29 @@ export const meetingsProcessing = inngest.createFunction(
       return {
         ...item,
         user: {
-          name: speaker.name
+          name: speaker.name || "Unnamed Speaker" // Fixed: Handle undefined/null names
         },
       };
     })
     })
 
-    const { output } = await summarizer.run(
-      "Summarize the following transcript: " + JSON.stringify(transcriptWithSpeakers)
-    );
+    // Add error handling for the summarizer call
+    let summary = "Summary unavailable";
+    try {
+      const { output } = await summarizer.run(
+        "Summarize the following transcript: " + JSON.stringify(transcriptWithSpeakers)
+      );
+      summary = (output[0] as TextMessage).content as string;
+    } catch (error) {
+      console.error("Error generating summary:", error);
+      // You might want to set a different status or handle this differently
+    }
 
     await step.run("save-summary", async () => {
       await db
       .update(meetings)
       .set({
-        summary: (output[0] as TextMessage).content as string,
+        summary: summary,
         status: "completed"
       })
       .where(eq(meetings.id, event.data.meetingId))
