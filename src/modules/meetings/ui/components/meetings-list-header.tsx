@@ -37,7 +37,7 @@ export default function MeetingsListHeader() {
             <h5 className="font-medium text-lg">My Meetings</h5>
             <Button onClick={() => setDialogOpen(true)}>
                 <PlusIcon />
-                New Metting
+                New Meeting
             </Button>
         </div>
         <ScrollArea>
