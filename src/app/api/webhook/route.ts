@@ -280,7 +280,7 @@ Be concise, helpful, and focus on providing accurate information from the meetin
 
             const avatarUrl = generateAvatarUrl({
                 seed: existingAgent.name,
-                variant: "botttsNeutral",
+                variant: "openPeeps",
             });
 
             // Upsert user first
