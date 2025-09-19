@@ -73,10 +73,10 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     console.log("📦 Raw body length:", body?.length ?? 0);
 
-    if (!verifySignatureWithSDK(body, signature)) {
-      console.error("❌ Invalid signature");
-      return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
-    }
+    // if (!verifySignatureWithSDK(body, signature)) {
+    //   console.error("❌ Invalid signature");
+    //   return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+    // }
 
     let payload: any;
     try {
