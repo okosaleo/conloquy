@@ -55,27 +55,81 @@ function verifySignatureWithSDK(body: string, signature: string): boolean {
   }
 }
 
+function testWithKnownPayload() {
+  // Test with a known payload to verify our API secret is working
+  const testPayload = '{"test":"webhook"}';
+  const secret = process.env.STREAM_VIDEO_SECRET_KEY; // Match your streamVideo client
+  
+  if (secret) {
+    const testSignature = crypto
+      .createHmac('sha256', secret)
+      .update(testPayload, 'utf8')
+      .digest('hex');
+    
+    console.log("🧪 Test signature generation with Stream Video API Secret:", {
+      payload: testPayload,
+      secretLength: secret.length,
+      secretPrefix: secret.substring(0, 8) + "...",
+      generatedSignature: testSignature,
+    });
+  } else {
+    console.error("❌ STREAM_VIDEO_SECRET_KEY (API Secret) not found in environment");
+  }
+}
+
 function manualVerifyWebhook(body: string, signature: string): boolean {
   try {
+    // Use the same secret as your streamVideo client
     const secret = process.env.STREAM_VIDEO_SECRET_KEY;
     if (!secret) {
-      console.error("❌ STREAM_SECRET not found in environment");
+      console.error("❌ STREAM_VIDEO_SECRET_KEY not found in environment");
       return false;
     }
 
+    // Log secret info (first few chars only for security)
+    console.log("🔑 Using Stream Video API Secret:", {
+      present: !!secret,
+      length: secret.length,
+      prefix: secret.substring(0, 8) + "...",
+    });
+
+    // Try different encoding approaches
+    const encodings = ['utf8', 'ascii', 'binary'] as const;
+    const results: any = {};
+    
+    for (const encoding of encodings) {
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(body, encoding)
+        .digest('hex');
+      
+      results[encoding] = {
+        expected: expectedSignature.substring(0, 20) + "...",
+        match: expectedSignature === (signature.startsWith('sha256=') ? signature.slice(7) : signature)
+      };
+    }
+
+    console.log("🔐 Manual verification with different encodings:", results);
+
+    // Also try with different signature formats
+    const providedSignature = signature.startsWith('sha256=') 
+      ? signature.slice(7) 
+      : signature;
+
+    // Standard approach (utf8)
     const expectedSignature = crypto
       .createHmac('sha256', secret)
       .update(body, 'utf8')
       .digest('hex');
     
-    const providedSignature = signature.startsWith('sha256=') 
-      ? signature.slice(7) 
-      : signature;
-    
-    console.log("🔐 Manual verification:", {
+    console.log("🔐 Signature comparison:", {
+      expectedFull: expectedSignature,
+      providedFull: providedSignature,
       expectedPrefix: expectedSignature.substring(0, 20) + "...",
       providedPrefix: providedSignature.substring(0, 20) + "...",
-      match: expectedSignature === providedSignature
+      match: expectedSignature === providedSignature,
+      bodyHash: crypto.createHash('md5').update(body, 'utf8').digest('hex').substring(0, 16),
+      secretHash: crypto.createHash('md5').update(secret, 'utf8').digest('hex').substring(0, 16),
     });
     
     return crypto.timingSafeEqual(
@@ -131,6 +185,9 @@ export async function POST(req: NextRequest) {
   const globalStart = Date.now();
   console.log("➡️ Webhook POST received");
 
+  // Test our secret configuration
+  testWithKnownPayload();
+
   try {
     // Get headers with case-insensitive fallback
     const signature = req.headers.get("x-signature") || req.headers.get("X-Signature");
@@ -150,13 +207,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing signature or API key" }, { status: 400 });
     }
 
-    // Get raw body with explicit encoding
-    const body = await req.text();
-    console.log("📦 Raw body details:", {
-      length: body?.length ?? 0,
-      preview: body?.substring(0, 200) + "...",
-      encoding: "utf8"
-    });
+    // Get raw body as buffer first to avoid multiple reads
+    let body: string;
+    let bodyBuffer: Buffer;
+    
+    try {
+      bodyBuffer = Buffer.from(await req.arrayBuffer());
+      body = bodyBuffer.toString('utf8');
+      
+      console.log("📦 Raw body details:", {
+        bufferLength: bodyBuffer.length,
+        stringLength: body.length,
+        preview: body.substring(0, 200) + "...",
+        firstChar: body.charCodeAt(0),
+        lastChar: body.charCodeAt(body.length - 1),
+        hasNewlines: body.includes('\n'),
+        hasCarriageReturns: body.includes('\r'),
+      });
+    } catch (bodyErr) {
+      console.error("❌ Failed to read request body:", bodyErr);
+      return NextResponse.json({ error: "Failed to read request body" }, { status: 400 });
+    }
 
     if (!body) {
       console.error("❌ Empty request body");
