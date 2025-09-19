@@ -81,6 +81,14 @@ function testWithKnownPayload() {
       secretPrefix: secret.substring(0, 8) + "...",
       generatedSignature: testSignature,
     });
+
+    // Also test with the X-API-KEY from the webhook request header
+    console.log("🔍 Environment check:", {
+      hasStreamVideoSecretKey: !!process.env.STREAM_VIDEO_SECRET_KEY,
+      hasStreamApiKey: !!process.env.NEXT_PUBLIC_STREAM_VIDEO_API_KEY,
+      streamVideoSecretKeyLength: process.env.STREAM_VIDEO_SECRET_KEY?.length,
+      streamApiKeyLength: process.env.NEXT_PUBLIC_STREAM_VIDEO_API_KEY?.length,
+    });
   } else {
     console.error("❌ STREAM_VIDEO_SECRET_KEY (API Secret) not found in environment");
   }
@@ -216,11 +224,37 @@ export async function POST(req: NextRequest) {
     const webhookId = req.headers.get("x-webhook-id") || req.headers.get("X-Webhook-Id");
     const attempt = req.headers.get("x-webhook-attempt") || req.headers.get("X-Webhook-Attempt");
     
+    // Log ALL headers for debugging
+    const allHeaders: Record<string, string> = {};
+    req.headers.forEach((value, key) => {
+      allHeaders[key] = value;
+    });
+    console.log("📋 ALL REQUEST HEADERS:", allHeaders);
+    
     console.log("🔐 Headers present:", { 
       signature: !!signature, 
       apiKey: !!apiKey,
       webhookId,
-      attempt
+      attempt,
+      // Compare the API key from the webhook with your environment
+      apiKeyMatches: apiKey === process.env.NEXT_PUBLIC_STREAM_VIDEO_API_KEY,
+      apiKeyFromRequest: apiKey?.substring(0, 8) + "...",
+      apiKeyFromEnv: process.env.NEXT_PUBLIC_STREAM_VIDEO_API_KEY?.substring(0, 8) + "...",
+    });
+
+    // Log deployment environment info
+    console.log("🌍 DEPLOYMENT INFO:", {
+      nodeEnv: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL_ENV,
+      vercelRegion: process.env.VERCEL_REGION,
+      platform: process.platform,
+      nodeVersion: process.version,
+      isVercel: !!process.env.VERCEL,
+      isAWS: !!process.env.AWS_REGION,
+      host: req.headers.get('host'),
+      userAgent: req.headers.get('user-agent'),
+      contentType: req.headers.get('content-type'),
+      contentLength: req.headers.get('content-length'),
     });
 
     if (!signature || !apiKey) {
