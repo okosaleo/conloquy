@@ -10,13 +10,22 @@ import { and, eq, not } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources/index.mjs";
+import crypto from 'crypto';
 import { db } from "@/db";
 import { agents, meetings } from "@/db/schema";
 import { streamVideo } from "@/lib/stream-video";
 import { inngest } from "@/inngest/client";
 import { generateAvatarUrl } from "@/lib/avatar";
 import { streamChat } from "@/lib/stream-chat";
-import crypto from "crypto";
+
+// Configuration for Next.js route handler
+export const maxDuration = 60;
+export const runtime = 'nodejs';
+export const config = {
+  api: {
+    bodyParser: false, // Disable body parsing to preserve raw body
+  },
+};
 
 const openaiClient = new OpenAI({
   apiKey: process.env.DEEPSEEK_API,
@@ -27,53 +36,76 @@ const openaiClient = new OpenAI({
 const processedMessages = new Map<string, number>();
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-async function getRawBody(request: NextRequest): Promise<string> {
-  const chunks = [];
-  const reader = request.body?.getReader();
-  
-  if (!reader) {
-    return "";
-  }
-  
+function verifySignatureWithSDK(body: string, signature: string): boolean {
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  
-  const buffer = Buffer.concat(chunks);
-  return buffer.toString("utf8");
-}
-
-function verifySignatureManual(body: string, signature: string): boolean {
-  try {
-    const secret = process.env.STREAM_VIDEO_SECRET_KEY!;
-    const hmac = crypto.createHmac("sha256", secret);
-    hmac.update(body);
-    const expectedSignature = hmac.digest("hex");
+    console.log("🔐 Verifying signature with SDK:", {
+      bodyLength: body?.length,
+      signaturePresent: !!signature,
+      bodyPreview: body?.substring(0, 100) + "...",
+      signaturePrefix: signature?.substring(0, 20) + "...",
+    });
     
-    // Handle potential prefix (like 'sha256=')
-    const cleanSignature = signature.replace(/^sha256=/, '');
-    
-    // Compare signatures in a timing-safe manner
-    return crypto.timingSafeEqual(
-      Buffer.from(cleanSignature),
-      Buffer.from(expectedSignature)
-    );
+    const ok = streamVideo.verifyWebhook(body, signature);
+    console.log("✅ SDK verification result:", ok);
+    return ok;
   } catch (err) {
-    console.error("verifySignatureManual => exception:", err);
+    console.error("❌ SDK verification exception:", err);
+    console.error("Stack trace:", (err as Error).stack);
     return false;
   }
+}
+
+function manualVerifyWebhook(body: string, signature: string): boolean {
+  try {
+    const secret = process.env.STREAM_VIDEO_SECRET_KEY;
+    if (!secret) {
+      console.error("❌ STREAM_SECRET not found in environment");
+      return false;
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(body, 'utf8')
+      .digest('hex');
+    
+    const providedSignature = signature.startsWith('sha256=') 
+      ? signature.slice(7) 
+      : signature;
+    
+    console.log("🔐 Manual verification:", {
+      expectedPrefix: expectedSignature.substring(0, 20) + "...",
+      providedPrefix: providedSignature.substring(0, 20) + "...",
+      match: expectedSignature === providedSignature
+    });
+    
+    return crypto.timingSafeEqual(
+      Buffer.from(expectedSignature, 'hex'),
+      Buffer.from(providedSignature, 'hex')
+    );
+  } catch (err) {
+    console.error("❌ Manual verification error:", err);
+    return false;
+  }
+}
+
+function verifySignature(body: string, signature: string): boolean {
+  // Try SDK verification first
+  const sdkResult = verifySignatureWithSDK(body, signature);
+  if (sdkResult) {
+    console.log("✅ SDK verification passed");
+    return true;
+  }
+
+  // Fallback to manual verification
+  console.log("⚠️ SDK verification failed, trying manual verification");
+  const manualResult = manualVerifyWebhook(body, signature);
+  if (manualResult) {
+    console.log("✅ Manual verification passed");
+    return true;
+  }
+
+  console.error("❌ Both SDK and manual verification failed");
+  return false;
 }
 
 function isDuplicateMessage(messageId: string): boolean {
@@ -100,23 +132,46 @@ export async function POST(req: NextRequest) {
   console.log("➡️ Webhook POST received");
 
   try {
-    const signature = req.headers.get("x-signature");
-    const apiKey = req.headers.get("x-api-key");
-    console.log("🔐 Headers present:", { signature: !!signature, apiKey: !!apiKey });
+    // Get headers with case-insensitive fallback
+    const signature = req.headers.get("x-signature") || req.headers.get("X-Signature");
+    const apiKey = req.headers.get("x-api-key") || req.headers.get("X-Api-Key");
+    const webhookId = req.headers.get("x-webhook-id") || req.headers.get("X-Webhook-Id");
+    const attempt = req.headers.get("x-webhook-attempt") || req.headers.get("X-Webhook-Attempt");
+    
+    console.log("🔐 Headers present:", { 
+      signature: !!signature, 
+      apiKey: !!apiKey,
+      webhookId,
+      attempt
+    });
 
     if (!signature || !apiKey) {
       console.error("❌ Missing signature or API key");
       return NextResponse.json({ error: "Missing signature or API key" }, { status: 400 });
     }
 
-   const body = await getRawBody(req);
-    console.log("📦 Raw body length:", body?.length ?? 0);
+    // Get raw body with explicit encoding
+    const body = await req.text();
+    console.log("📦 Raw body details:", {
+      length: body?.length ?? 0,
+      preview: body?.substring(0, 200) + "...",
+      encoding: "utf8"
+    });
 
-     if (!verifySignatureManual(body, signature)) {
-      console.error("❌ Invalid signature");
-      return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+    if (!body) {
+      console.error("❌ Empty request body");
+      return NextResponse.json({ error: "Empty request body" }, { status: 400 });
     }
 
+    // Verify signature
+    if (!verifySignature(body, signature)) {
+      console.error("❌ Invalid signature - webhook rejected");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+
+    console.log("✅ Signature verification passed");
+
+    // Parse JSON payload
     let payload: any;
     try {
       payload = JSON.parse(body);
@@ -127,7 +182,7 @@ export async function POST(req: NextRequest) {
     }
 
     const eventType = payload?.type;
-    console.log("📌 Event type:", eventType);
+    console.log("📌 Processing event type:", eventType);
 
     // -------------------------
     // call.session_started
@@ -135,6 +190,7 @@ export async function POST(req: NextRequest) {
     if (eventType === "call.session_started") {
       const start = Date.now();
       console.log("🎬 Handling call.session_started event");
+      
       const event = payload as CallSessionStartedEvent;
       const meetingId = event?.call?.custom?.meetingId;
       console.log("🆔 meetingId:", meetingId);
@@ -144,7 +200,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Missing meetingId" }, { status: 400 });
       }
 
-      // Fetch meeting
+      // Fetch meeting from database
       console.log("🔍 Querying DB for meeting:", meetingId);
       const [existingMeeting] = await db
         .select()
@@ -158,16 +214,17 @@ export async function POST(req: NextRequest) {
             not(eq(meetings.status, "processing"))
           )
         );
-      console.log("📄 DB returned meeting:", existingMeeting);
+      
+      console.log("📄 DB returned meeting:", !!existingMeeting);
 
       if (!existingMeeting) {
         console.error("❌ Meeting not found for id:", meetingId);
         return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
       }
 
-      // Update meeting active
+      // Update meeting status to active
       try {
-        const tStart = Date.now();
+        const updateStart = Date.now();
         await db
           .update(meetings)
           .set({
@@ -175,16 +232,21 @@ export async function POST(req: NextRequest) {
             startedAt: new Date(),
           })
           .where(eq(meetings.id, existingMeeting.id));
-        console.log(`✅ Marked meeting active (took ${Date.now() - tStart}ms)`);
+        
+        console.log(`✅ Meeting marked active (took ${Date.now() - updateStart}ms)`);
       } catch (err) {
         console.error("❌ Failed to update meeting status:", err);
-        // continue — we still try to connect the agent but log heavily
+        // Continue processing despite DB error
       }
 
-      // Fetch agent
+      // Fetch agent from database
       console.log("🔍 Querying DB for agent:", existingMeeting.agentId);
-      const [existingAgent] = await db.select().from(agents).where(eq(agents.id, existingMeeting.agentId));
-      console.log("🤖 DB returned agent:", existingAgent);
+      const [existingAgent] = await db
+        .select()
+        .from(agents)
+        .where(eq(agents.id, existingMeeting.agentId));
+      
+      console.log("🤖 DB returned agent:", !!existingAgent);
 
       if (!existingAgent) {
         console.error("❌ Agent not found for id:", existingMeeting.agentId);
@@ -193,9 +255,9 @@ export async function POST(req: NextRequest) {
 
       // Create Stream call and connect agent via OpenAI realtime
       try {
-        console.log("📞 Creating streamVideo.call for meeting:", meetingId);
+        console.log("📞 Creating streamVideo call for meeting:", meetingId);
         const call = streamVideo.video.call("default", meetingId);
-        console.log("📞 streamVideo.call created, call.id:", (call as any)?.id ?? "unknown");
+        console.log("📞 Call created successfully");
 
         console.log("🔗 Connecting realtime OpenAI client for agent:", existingAgent.id);
         const realtimeClient = await streamVideo.video.connectOpenAi({
@@ -204,22 +266,25 @@ export async function POST(req: NextRequest) {
           agentUserId: existingAgent.id,
           model: "gpt-4o-mini-realtime-preview-2024-12-17",
         });
-        console.log("✅ Realtime client connected:", !!realtimeClient);
+        
+        console.log("✅ Realtime client connected");
 
+        // Update session with agent instructions
         try {
           await realtimeClient.updateSession({
             instructions: existingAgent.instructions,
             voice: "ballad",
           });
           console.log("✅ Realtime session updated with instructions");
-        } catch (err) {
-          console.error("❌ realtimeClient.updateSession failed:", err);
+        } catch (sessionErr) {
+          console.error("❌ Failed to update realtime session:", sessionErr);
         }
-      } catch (err) {
-        console.error("❌ Failed to create/connect realtime client:", err);
+        
+      } catch (callErr) {
+        console.error("❌ Failed to create/connect realtime client:", callErr);
       }
 
-      console.log(`🎬 call.session_started handler finished in ${Date.now() - start}ms`);
+      console.log(`🎬 call.session_started completed in ${Date.now() - start}ms`);
     }
 
     // -------------------------
@@ -228,6 +293,7 @@ export async function POST(req: NextRequest) {
     else if (eventType === "call.session_participant_left") {
       const start = Date.now();
       console.log("👋 Handling call.session_participant_left");
+      
       const event = payload as CallSessionParticipantLeftEvent;
       const meetingId = event?.call_cid?.split?.(":")?.[1];
       console.log("🆔 meetingId:", meetingId);
@@ -241,12 +307,12 @@ export async function POST(req: NextRequest) {
         const call = streamVideo.video.call("default", meetingId);
         console.log("📞 Ending call for meeting:", meetingId);
         await call.end();
-        console.log("✅ call ended");
+        console.log("✅ Call ended successfully");
       } catch (err) {
         console.error("❌ Failed to end call:", err);
       }
 
-      console.log(`👋 participant_left handler finished in ${Date.now() - start}ms`);
+      console.log(`👋 participant_left completed in ${Date.now() - start}ms`);
     }
 
     // -------------------------
@@ -255,6 +321,7 @@ export async function POST(req: NextRequest) {
     else if (eventType === "call.session_ended") {
       const start = Date.now();
       console.log("📴 Handling call.session_ended");
+      
       const event = payload as CallEndedEvent;
       const meetingId = event?.call?.custom?.meetingId;
       console.log("🆔 meetingId:", meetingId);
@@ -272,12 +339,13 @@ export async function POST(req: NextRequest) {
             endedAt: new Date(),
           })
           .where(and(eq(meetings.id, meetingId), eq(meetings.status, "active")));
-        console.log("✅ Meeting marked processing");
+        
+        console.log("✅ Meeting status updated to processing");
       } catch (err) {
-        console.error("❌ Failed to mark meeting processing:", err);
+        console.error("❌ Failed to update meeting status to processing:", err);
       }
 
-      console.log(`📴 session_ended handler finished in ${Date.now() - start}ms`);
+      console.log(`📴 session_ended completed in ${Date.now() - start}ms`);
     }
 
     // -------------------------
@@ -286,6 +354,7 @@ export async function POST(req: NextRequest) {
     else if (eventType === "call.transcription_ready") {
       const start = Date.now();
       console.log("📝 Handling call.transcription_ready");
+      
       const event = payload as CallTranscriptionReadyEvent;
       const meetingId = event?.call_cid?.split?.(":")?.[1];
       console.log("🆔 meetingId:", meetingId);
@@ -303,13 +372,15 @@ export async function POST(req: NextRequest) {
           })
           .where(eq(meetings.id, meetingId))
           .returning();
-        console.log("📄 Updated meeting:", updatedMeeting);
+
+        console.log("📄 Meeting updated with transcript URL:", !!updatedMeeting);
 
         if (!updatedMeeting) {
           console.error("❌ Meeting not found when saving transcript");
           return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
         }
 
+        // Send Inngest event for processing
         try {
           await inngest.send({
             name: "meetings/processing",
@@ -319,14 +390,15 @@ export async function POST(req: NextRequest) {
             },
           });
           console.log("📤 Inngest event sent: meetings/processing");
-        } catch (err) {
-          console.error("❌ Failed to send Inngest event:", err);
+        } catch (inngestErr) {
+          console.error("❌ Failed to send Inngest event:", inngestErr);
         }
+        
       } catch (err) {
         console.error("❌ Error handling transcription_ready:", err);
       }
 
-      console.log(`📝 transcription_ready handler finished in ${Date.now() - start}ms`);
+      console.log(`📝 transcription_ready completed in ${Date.now() - start}ms`);
     }
 
     // -------------------------
@@ -335,6 +407,7 @@ export async function POST(req: NextRequest) {
     else if (eventType === "call.recording_ready") {
       const start = Date.now();
       console.log("🎥 Handling call.recording_ready");
+      
       const event = payload as CallRecordingReadyEvent;
       const meetingId = event?.call_cid?.split?.(":")?.[1];
       console.log("🆔 meetingId:", meetingId);
@@ -351,12 +424,13 @@ export async function POST(req: NextRequest) {
             recordingUrl: event.call_recording.url,
           })
           .where(eq(meetings.id, meetingId));
-        console.log("✅ Recording URL saved to DB");
+        
+        console.log("✅ Recording URL saved to database");
       } catch (err) {
         console.error("❌ Failed to save recording URL:", err);
       }
 
-      console.log(`🎥 recording_ready handler finished in ${Date.now() - start}ms`);
+      console.log(`🎥 recording_ready completed in ${Date.now() - start}ms`);
     }
 
     // -------------------------
@@ -365,13 +439,13 @@ export async function POST(req: NextRequest) {
     else if (eventType === "message.new") {
       const start = Date.now();
       console.log("💬 Handling message.new");
+      
       const event = payload as MessageNewEvent;
-      // Log a compact view of important fields only to avoid huge logs
       console.log("➡️ message.new fields:", {
         channel_id: event?.channel_id,
         message_id: event?.message?.id,
         user_id: event?.user?.id,
-        text_present: !!event?.message?.text,
+        has_text: !!event?.message?.text,
       });
 
       const userId = event.user?.id;
@@ -380,33 +454,43 @@ export async function POST(req: NextRequest) {
       const messageId = event.message?.id;
 
       if (!userId || !channelId || !text || !messageId) {
-        console.error("❌ Missing required fields in message.new:", { userId, channelId, text: !!text, messageId });
+        console.error("❌ Missing required fields in message.new:", { 
+          userId: !!userId, 
+          channelId: !!channelId, 
+          text: !!text, 
+          messageId: !!messageId 
+        });
         return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
       }
 
-      // Check duplicate
+      // Check for duplicate messages
       if (isDuplicateMessage(messageId)) {
         console.warn(`⚠️ Duplicate message detected: ${messageId}`);
         return NextResponse.json({ status: "duplicate_ignored" });
       }
 
-      // Lookup meeting
+      // Look up completed meeting
       console.log("🔍 Querying DB for completed meeting:", channelId);
       const [existingMeeting] = await db
         .select()
         .from(meetings)
         .where(and(eq(meetings.id, channelId), eq(meetings.status, "completed")));
-      console.log("📄 existingMeeting:", existingMeeting);
+      
+      console.log("📄 Meeting found:", !!existingMeeting);
 
       if (!existingMeeting) {
-        console.error("❌ Meeting not found for channelId:", channelId);
+        console.error("❌ Completed meeting not found for channelId:", channelId);
         return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
       }
 
-      // Lookup agent
+      // Look up agent
       console.log("🔍 Querying DB for agent:", existingMeeting.agentId);
-      const [existingAgent] = await db.select().from(agents).where(eq(agents.id, existingMeeting.agentId));
-      console.log("🤖 existingAgent:", existingAgent);
+      const [existingAgent] = await db
+        .select()
+        .from(agents)
+        .where(eq(agents.id, existingMeeting.agentId));
+      
+      console.log("🤖 Agent found:", !!existingAgent);
 
       if (!existingAgent) {
         console.error("❌ Agent not found for id:", existingMeeting.agentId);
@@ -419,7 +503,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ status: "agent_message_ignored" });
       }
 
-      // Build instructions
+      // Build system instructions for post-meeting chat
       const instructions = `
 You are an AI assistant helping the user revisit a recently completed meeting.
 Below is a summary of the meeting, generated from the transcript:
@@ -441,21 +525,25 @@ Be concise, helpful, and focus on providing accurate information from the meetin
 `;
 
       try {
-        console.log("📡 Getting Stream Chat channel and watching:", channelId);
+        // Get Stream Chat channel and watch it
+        console.log("📡 Getting Stream Chat channel:", channelId);
         const channel = streamChat.channel("messaging", channelId);
         await channel.watch();
-        console.log("✅ Channel watched");
+        console.log("✅ Channel watched successfully");
 
+        // Get previous messages for context
         const previousMessages = (channel.state.messages || [])
-          .slice(-5)
+          .slice(-5) // Last 5 messages
           .filter((msg) => msg.text && msg.text.trim() !== "" && msg.id !== messageId)
           .map<ChatCompletionMessageParam>((message) => ({
             role: message.user?.id === existingAgent.id ? "assistant" : "user",
             content: message.text || "",
           }));
-        console.log("🕓 previousMessages length:", previousMessages.length);
+        
+        console.log("🕓 Previous messages loaded:", previousMessages.length);
 
-        console.log("🤖 Sending to DeepSeek/OpenAI (model=deepseek-chat) — prompt text length:", text.length);
+        // Send to AI for response
+        console.log("🤖 Sending to DeepSeek AI, prompt length:", text.length);
         const GPTResponse = await openaiClient.chat.completions.create({
           messages: [
             { role: "system", content: instructions },
@@ -467,28 +555,31 @@ Be concise, helpful, and focus on providing accurate information from the meetin
         });
 
         const GPTResponseText = GPTResponse?.choices?.[0]?.message?.content;
-        console.log("✅ GPT response received:", !!GPTResponseText);
+        console.log("✅ AI response received:", !!GPTResponseText);
 
         if (!GPTResponseText) {
-          console.error("❌ No response body from GPT");
-          return NextResponse.json({ error: "No response from GPT" }, { status: 400 });
+          console.error("❌ No response from AI");
+          return NextResponse.json({ error: "No response from AI" }, { status: 500 });
         }
 
+        // Generate avatar for agent
         const avatarUrl = generateAvatarUrl({
           seed: existingAgent.name,
           variant: "openPeeps",
         });
-        console.log("🖼 Generated avatarUrl:", avatarUrl);
+        console.log("🖼 Avatar generated for agent");
 
-        console.log("⬆️ Upserting agent user to Stream Chat:", existingAgent.id);
+        // Upsert agent user in Stream Chat
+        console.log("⬆️ Upserting agent user:", existingAgent.id);
         await streamChat.upsertUser({
           id: existingAgent.id,
           name: existingAgent.name,
           image: avatarUrl,
         });
-        console.log("✅ Upserted agent user");
+        console.log("✅ Agent user upserted");
 
-        console.log("📤 Sending GPT reply to channel:", channelId);
+        // Send AI response to channel
+        console.log("📤 Sending AI response to channel");
         await channel.sendMessage({
           text: GPTResponseText,
           user: {
@@ -497,24 +588,30 @@ Be concise, helpful, and focus on providing accurate information from the meetin
             image: avatarUrl,
           },
         });
-        console.log("✅ Sent GPT reply to stream chat");
+        console.log("✅ AI response sent to channel");
+        
       } catch (err) {
         console.error("❌ Error processing message.new:", err);
         return NextResponse.json({ error: "Failed to process message" }, { status: 500 });
       }
 
-      console.log(`💬 message.new handler finished in ${Date.now() - start}ms`);
+      console.log(`💬 message.new completed in ${Date.now() - start}ms`);
     }
 
+    // -------------------------
     // Unknown event type
+    // -------------------------
     else {
       console.warn("⚠️ Unknown event type received:", eventType);
+      return NextResponse.json({ status: "unknown_event_ignored" });
     }
 
-    console.log(`✅ Finished processing event (total ${Date.now() - globalStart}ms)`);
+    console.log(`✅ Webhook processing completed in ${Date.now() - globalStart}ms`);
     return NextResponse.json({ status: "ok" });
+
   } catch (err) {
     console.error("🔥 Unhandled exception in webhook handler:", err);
+    console.error("Stack trace:", (err as Error).stack);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
