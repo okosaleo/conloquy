@@ -45,7 +45,7 @@ function verifySignatureWithSDK(body: string, signature: string): boolean {
       signaturePrefix: signature?.substring(0, 20) + "...",
     });
     
-    const ok = streamChat.verifyWebhook(body, signature);
+    const ok = streamVideo.verifyWebhook(body, signature);
     console.log("✅ SDK verification result:", ok);
     return ok;
   } catch (err) {
