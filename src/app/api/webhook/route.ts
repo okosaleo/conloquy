@@ -16,7 +16,7 @@ import { streamVideo } from "@/lib/stream-video";
 import { inngest } from "@/inngest/client";
 import { generateAvatarUrl } from "@/lib/avatar";
 import { streamChat } from "@/lib/stream-chat";
-import crypto from 'crypto';
+import crypto from "crypto";
 
 const openaiClient = new OpenAI({
   apiKey: process.env.DEEPSEEK_API,
@@ -27,17 +27,53 @@ const openaiClient = new OpenAI({
 const processedMessages = new Map<string, number>();
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
-function verifySignatureWithSDK(body: string, signature: string): boolean {
+async function getRawBody(request: NextRequest): Promise<string> {
+  const chunks = [];
+  const reader = request.body?.getReader();
+  
+  if (!reader) {
+    return "";
+  }
+  
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  
+  const buffer = Buffer.concat(chunks);
+  return buffer.toString("utf8");
+}
+
+function verifySignatureManual(body: string, signature: string): boolean {
+  try {
     const secret = process.env.STREAM_VIDEO_SECRET_KEY!;
-  const hmac = crypto.createHmac('sha256', secret);
-  hmac.update(body);
-  const expectedSignature = hmac.digest('hex');
-  
-  // Handle potential prefix (like 'sha256=')
-  const cleanSignature = signature.replace(/^sha256=/, '');
-  
-  return cleanSignature === expectedSignature;
+    const hmac = crypto.createHmac("sha256", secret);
+    hmac.update(body);
+    const expectedSignature = hmac.digest("hex");
+    
+    // Handle potential prefix (like 'sha256=')
+    const cleanSignature = signature.replace(/^sha256=/, '');
+    
+    // Compare signatures in a timing-safe manner
+    return crypto.timingSafeEqual(
+      Buffer.from(cleanSignature),
+      Buffer.from(expectedSignature)
+    );
+  } catch (err) {
+    console.error("verifySignatureManual => exception:", err);
+    return false;
+  }
 }
 
 function isDuplicateMessage(messageId: string): boolean {
@@ -73,13 +109,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing signature or API key" }, { status: 400 });
     }
 
-    const body = await req.text();
+   const body = await getRawBody(req);
     console.log("📦 Raw body length:", body?.length ?? 0);
 
-    if (!verifySignatureWithSDK(body, signature)) {
-  console.error("❌ Invalid signature");
-  return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
-}
+     if (!verifySignatureManual(body, signature)) {
+      console.error("❌ Invalid signature");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+    }
 
     let payload: any;
     try {

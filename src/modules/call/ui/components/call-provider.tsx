@@ -29,7 +29,7 @@ export default function CallProvider({meetingId, meetingName}: Props) {
     userName={data.user.name}
     userImage={
         data.user.image ?? 
-        generateAvatarUrl({seed: data.user.name, variant: "initials"})
+        generateAvatarUrl({seed: data.user.name, variant: "openPeeps"})
     }
      />
    )
