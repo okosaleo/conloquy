@@ -16,6 +16,7 @@ import { streamVideo } from "@/lib/stream-video";
 import { inngest } from "@/inngest/client";
 import { generateAvatarUrl } from "@/lib/avatar";
 import { streamChat } from "@/lib/stream-chat";
+import crypto from 'crypto';
 
 const openaiClient = new OpenAI({
   apiKey: process.env.DEEPSEEK_API,
@@ -26,15 +27,17 @@ const openaiClient = new OpenAI({
 const processedMessages = new Map<string, number>();
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
+
 function verifySignatureWithSDK(body: string, signature: string): boolean {
-  try {
-    const ok = streamVideo.verifyWebhook(body, signature);
-    console.log("verifySignatureWithSDK => result:", ok);
-    return ok;
-  } catch (err) {
-    console.error("verifySignatureWithSDK => exception:", err);
-    return false;
-  }
+    const secret = process.env.STREAM_VIDEO_SECRET_KEY!;
+  const hmac = crypto.createHmac('sha256', secret);
+  hmac.update(body);
+  const expectedSignature = hmac.digest('hex');
+  
+  // Handle potential prefix (like 'sha256=')
+  const cleanSignature = signature.replace(/^sha256=/, '');
+  
+  return cleanSignature === expectedSignature;
 }
 
 function isDuplicateMessage(messageId: string): boolean {
@@ -73,10 +76,10 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     console.log("📦 Raw body length:", body?.length ?? 0);
 
-    // if (!verifySignatureWithSDK(body, signature)) {
-    //   console.error("❌ Invalid signature");
-    //   return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
-    // }
+    if (!verifySignatureWithSDK(body, signature)) {
+  console.error("❌ Invalid signature");
+  return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+}
 
     let payload: any;
     try {
