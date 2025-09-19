@@ -41,8 +41,17 @@ function verifySignatureWithSDK(body: string, signature: string): boolean {
     console.log("🔐 Verifying signature with SDK:", {
       bodyLength: body?.length,
       signaturePresent: !!signature,
-      bodyPreview: body?.substring(0, 100) + "...",
+      bodyPreview: body?.substring(0, 200) + "...",
       signaturePrefix: signature?.substring(0, 20) + "...",
+      streamVideoClient: !!streamVideo,
+      streamVideoClientType: typeof streamVideo,
+    });
+    
+    // Log the streamVideo configuration (without exposing secrets)
+    console.log("🔧 StreamVideo client config:", {
+      hasVideoProperty: !!streamVideo?.video,
+      hasVerifyWebhookMethod: typeof streamVideo?.verifyWebhook === 'function',
+      clientMethods: Object.getOwnPropertyNames(streamVideo).filter(name => typeof (streamVideo as any)[name] === 'function'),
     });
     
     const ok = streamVideo.verifyWebhook(body, signature);
@@ -86,50 +95,62 @@ function manualVerifyWebhook(body: string, signature: string): boolean {
       return false;
     }
 
-    // Log secret info (first few chars only for security)
     console.log("🔑 Using Stream Video API Secret:", {
       present: !!secret,
       length: secret.length,
       prefix: secret.substring(0, 8) + "...",
     });
 
-    // Try different encoding approaches
-    const encodings = ['utf8', 'ascii', 'binary'] as const;
-    const results: any = {};
-    
-    for (const encoding of encodings) {
+    // Log raw body details for debugging
+    console.log("📄 Body analysis:", {
+      length: body.length,
+      firstLine: body.split('\n')[0],
+      lastLine: body.split('\n').slice(-1)[0],
+      hasWhitespace: /\s/.test(body),
+      startsWithBrace: body.trimStart().startsWith('{'),
+      endsWithBrace: body.trimEnd().endsWith('}'),
+    });
+
+    // Try with different body modifications
+    const bodyVariations = [
+      { name: 'original', body: body },
+      { name: 'trimmed', body: body.trim() },
+      { name: 'no_spaces', body: body.replace(/\s+/g, '') },
+      { name: 'normalized_newlines', body: body.replace(/\r\n/g, '\n') },
+    ];
+
+    console.log("🧪 Testing different body variations:");
+    for (const variation of bodyVariations) {
       const expectedSignature = crypto
         .createHmac('sha256', secret)
-        .update(body, encoding)
+        .update(variation.body, 'utf8')
         .digest('hex');
       
-      results[encoding] = {
-        expected: expectedSignature.substring(0, 20) + "...",
-        match: expectedSignature === (signature.startsWith('sha256=') ? signature.slice(7) : signature)
-      };
+      const match = expectedSignature === (signature.startsWith('sha256=') ? signature.slice(7) : signature);
+      console.log(`  ${variation.name}: ${expectedSignature.substring(0, 16)}... (match: ${match})`);
+      
+      if (match) {
+        console.log(`✅ MATCH FOUND with ${variation.name} body variation!`);
+        return true;
+      }
     }
 
-    console.log("🔐 Manual verification with different encodings:", results);
-
-    // Also try with different signature formats
+    // Standard verification (utf8)
     const providedSignature = signature.startsWith('sha256=') 
       ? signature.slice(7) 
       : signature;
 
-    // Standard approach (utf8)
     const expectedSignature = crypto
       .createHmac('sha256', secret)
       .update(body, 'utf8')
       .digest('hex');
     
-    console.log("🔐 Signature comparison:", {
+    console.log("🔐 Final signature comparison:", {
       expectedFull: expectedSignature,
       providedFull: providedSignature,
-      expectedPrefix: expectedSignature.substring(0, 20) + "...",
-      providedPrefix: providedSignature.substring(0, 20) + "...",
       match: expectedSignature === providedSignature,
-      bodyHash: crypto.createHash('md5').update(body, 'utf8').digest('hex').substring(0, 16),
-      secretHash: crypto.createHash('md5').update(secret, 'utf8').digest('hex').substring(0, 16),
+      bodyMD5: crypto.createHash('md5').update(body, 'utf8').digest('hex'),
+      secretMD5: crypto.createHash('md5').update(secret, 'utf8').digest('hex').substring(0, 16) + "...",
     });
     
     return crypto.timingSafeEqual(
