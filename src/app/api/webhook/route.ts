@@ -289,13 +289,50 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Empty request body" }, { status: 400 });
     }
 
-    // Verify signature
-    if (!verifySignature(body, signature)) {
-      console.error("❌ Invalid signature - webhook rejected");
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    // Alternative security when signature verification is skipped
+    if (isBrimble) {
+      console.log("⚠️ SKIPPING SIGNATURE VERIFICATION ON BRIMBLE (platform modifies request body)");
+      console.log("🔐 Using alternative security measures");
+      
+      // 1. Validate API key matches
+      if (apiKey !== process.env.NEXT_PUBLIC_STREAM_VIDEO_API_KEY) {
+        console.error("❌ API key mismatch - webhook rejected");
+        return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
+      }
+      
+      // 2. Check webhook URL secret (optional)
+      const urlSecret = new URL(req.url).searchParams.get('secret');
+      if (process.env.WEBHOOK_URL_SECRET && urlSecret !== process.env.WEBHOOK_URL_SECRET) {
+        console.error("❌ Invalid URL secret - webhook rejected");
+        return NextResponse.json({ error: "Invalid URL secret" }, { status: 401 });
+      }
+      
+      // 3. Validate timestamp (prevent old webhook replays)
+      try {
+        const payload = JSON.parse(body);
+        if (payload.created_at) {
+          const webhookTime = new Date(payload.created_at).getTime();
+          const now = Date.now();
+          const fiveMinutes = 5 * 60 * 1000;
+          
+          if ((now - webhookTime) > fiveMinutes) {
+            console.error("❌ Webhook too old - rejected");
+            return NextResponse.json({ error: "Webhook expired" }, { status: 401 });
+          }
+        }
+      } catch (err) {
+        console.log("⚠️ Could not validate timestamp:", err);
+      }
+      
+      console.log("✅ Alternative security validation passed");
+    } else {
+      // Do signature verification for local/other environments
+      if (!verifySignature(body, signature)) {
+        console.error("❌ Invalid signature - webhook rejected");
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+      }
+      console.log("✅ Signature verification passed");
     }
-
-    console.log("✅ Signature verification passed");
 
     // Parse JSON payload
     let payload: any;
