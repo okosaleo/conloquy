@@ -727,12 +727,13 @@ Be concise, helpful, and focus on providing accurate information from the meetin
         });
         console.log("🖼 Avatar generated for agent");
 
-        // Upsert agent user in Stream Chat
+        // Upsert agent user in Stream Chat (only essential fields to avoid 5KB limit)
         console.log("⬆️ Upserting agent user:", existingAgent.id);
         await streamChat.upsertUser({
           id: existingAgent.id,
           name: existingAgent.name,
           image: avatarUrl,
+          // Don't include instructions or other large fields
         });
         console.log("✅ Agent user upserted");
 
