@@ -289,9 +289,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Empty request body" }, { status: 400 });
     }
 
-    // Alternative security when signature verification is skipped
-    if (isBrimble) {
-      console.log("⚠️ SKIPPING SIGNATURE VERIFICATION ON BRIMBLE (platform modifies request body)");
+    // Skip signature verification in production due to platform body modification
+    const skipSignatureVerification = process.env.NODE_ENV === 'production';
+    
+    if (skipSignatureVerification) {
+      console.log("⚠️ SKIPPING SIGNATURE VERIFICATION IN PRODUCTION (platform modifies request body)");
       console.log("🔐 Using alternative security measures");
       
       // 1. Validate API key matches
@@ -300,14 +302,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
       }
       
-      // 2. Check webhook URL secret (optional)
-      const urlSecret = new URL(req.url).searchParams.get('secret');
-      if (process.env.WEBHOOK_URL_SECRET && urlSecret !== process.env.WEBHOOK_URL_SECRET) {
-        console.error("❌ Invalid URL secret - webhook rejected");
-        return NextResponse.json({ error: "Invalid URL secret" }, { status: 401 });
-      }
-      
-      // 3. Validate timestamp (prevent old webhook replays)
+      // 2. Validate timestamp (prevent old webhook replays)
       try {
         const payload = JSON.parse(body);
         if (payload.created_at) {
