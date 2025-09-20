@@ -13,15 +13,28 @@ import JSONL from "jsonl-parse-stringify";
 import { streamChat } from "@/lib/stream-chat";
 
 export const meetingsRouter = createTRPCRouter({
-    generateChatToken: protectedProcedure.mutation(async ({ctx }) => {
+  generateChatToken: protectedProcedure.mutation(async ({ctx }) => {
+    console.log("🔍 Stream Chat Debug:", {
+        hasApiKey: !!process.env.NEXT_PUBLIC_STREAM_CHAT_API_KEY,
+        hasSecret: !!process.env.STREAM_CHAT_SECRET_KEY,
+        apiKeyPrefix: process.env.NEXT_PUBLIC_STREAM_CHAT_API_KEY?.substring(0, 8),
+        secretPrefix: process.env.STREAM_CHAT_SECRET_KEY?.substring(0, 8),
+        userId: ctx.auth.user.id
+    });
+    
+    try {
         const token = streamChat.createToken(ctx.auth.user.id);
         await streamChat.upsertUser({
             id: ctx.auth.user.id,
             role: "admin"
         });
-
-        return token
-    }),
+        console.log("✅ Stream Chat token generated successfully");
+        return token;
+    } catch (err) {
+        console.error("❌ Stream Chat error:", err);
+        throw err;
+    }
+}),
     getTranscript: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({input, ctx}) => {
