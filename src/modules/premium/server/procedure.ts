@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { agents, meetings } from "@/db/schema";
 import { polarClient } from "@/lib/polar";
-import { protectedProcedure, baseProcedure, createTRPCRouter} from "@/trpc/init";
+import { protectedProcedure, createTRPCRouter} from "@/trpc/init";
 import { count, eq } from "drizzle-orm";
 
 export const premiumRouter = createTRPCRouter({

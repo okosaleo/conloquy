@@ -8,6 +8,19 @@ import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MIN_PAGE_SIZE } from "@
 import { TRPCError } from "@trpc/server";
 
 export const agentsRouter = createTRPCRouter({
+lastThree: protectedProcedure.query(async ({ ctx }) => {
+  const agentsList = await db
+    .select({
+      ...getTableColumns(agents),
+      meetingCount: db.$count(meetings, eq(agents.id, meetings.agentId)),
+    })
+    .from(agents)
+    .where(eq(agents.userId, ctx.auth.user.id))
+    .orderBy(desc(agents.createdAt), desc(agents.id)) 
+    .limit(4);
+
+  return agentsList;
+}),
     update: protectedProcedure
     .input(agentsUpdateSchema)
     .mutation(async ({ctx, input}) => {

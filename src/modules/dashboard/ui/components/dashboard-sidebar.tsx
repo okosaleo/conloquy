@@ -6,7 +6,6 @@ import {
     SidebarContent,
     SidebarFooter,
     SidebarHeader,
-    SidebarItem,
     SidebarMenu,
     SidebarMenuItem,
     SidebarMenuButton,
@@ -14,7 +13,7 @@ import {
     SidebarGroupContent
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { BotIcon, StarIcon, VideoIcon } from "lucide-react";
+import { BotIcon, LayoutDashboardIcon, StarIcon, VideoIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -22,6 +21,11 @@ import DashboardUserButton from "./dashbaord-user-button";
 import DashboardTrial from "./dashboard-trial";
 
 const firstSection = [
+  {
+        icon: LayoutDashboardIcon,
+        label: "Home",
+        href: "/",
+    },
     {
         icon: VideoIcon,
         label: "Meetings",
