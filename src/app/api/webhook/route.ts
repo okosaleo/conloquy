@@ -723,7 +723,7 @@ Be concise, helpful, and focus on providing accurate information from the meetin
         // Generate avatar for agent
         const avatarUrl = generateAvatarUrl({
           seed: existingAgent.name,
-          variant: "openPeeps",
+          variant: "botttsNeutral",
         });
         console.log("🖼 Avatar generated for agent");
 
