@@ -52,7 +52,7 @@ export default function DashboardSidebar() {
     <Sidebar>
         <SidebarHeader className="text-sidebar-accent-foreground">
             <Link href="/" className="flex items-start justify-center mt-[-24px]">
-            <Image src="/conloquy.png" alt="Conloquy Logo" height={100} width={100}  />
+            <Image src="/conloquy.png" priority alt="Conloquy Logo" height={100} width={100}  />
             </Link>
         </SidebarHeader>
         <div className=" mt-[-24px]">
