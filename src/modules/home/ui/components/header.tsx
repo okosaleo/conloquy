@@ -1,7 +1,6 @@
 import GeneratedAvatar from '@/components/generated-avatar';
 import { Button } from '@/components/ui/button';
 import { BotIcon, ChevronRightIcon, VideoIcon } from 'lucide-react';
-import { BarChart, Bar, XAxis, ResponsiveContainer } from 'recharts';
  import { authClient } from "@/lib/auth-client";
 import Link from 'next/link';
 import React from 'react'
@@ -42,7 +41,7 @@ export default function Header({ totalAgents, totalMeetings, mostActiveAgent, du
        </div>
       </div>
         {(totalAgents! > 0 || totalMeetings! > 0) && (
-          <div className='w-full flex md:flex-row items-start flex-col lg:gap-4 gap-2 '>
+          <div className='w-full flex lg:flex-row items-start flex-col lg:gap-4 gap-2 '>
     <div className='flex items-center lg:gap-4 gap-2 w-full lg:w-2/3'>
         <div className='bg-white border-primary/20 border-[0.2px] rounded-md md:p-4 p-1 w-1/2 h-20 flex gap-2 items-center'>
             <div className='bg-foreground rounded-md flex items-center justify-center lg:h-16 h-16 lg:w-1/4 w-1/2'>
@@ -68,36 +67,17 @@ export default function Header({ totalAgents, totalMeetings, mostActiveAgent, du
         </div>
     </div>
      {mostActiveAgent && (
-    <div className=' lg:w-1/3 w-full h-[calc(100vh-21rem)] rounded-md border-primary/20 border-[1px] flex flex-col p-1 bg-white'>
+    <div className=' lg:w-1/3 w-full h-72 rounded-md border-primary/20 border-[1px] flex flex-col p-1 bg-white'>
         <div className='flex items-center justify-center mt-3'>
           <p className='font-semibold'>Favourite Agent</p>
         </div>
         <div>
-          <GeneratedAvatar seed={mostActiveAgent.name} variant="openPeeps" className="w-28 h-28 rounded-full mx-auto mt-4 bg-gradient-to-r from-primary/5 to-primary/20  border-primary/20 border-[0.2px]" />
+          <GeneratedAvatar seed={mostActiveAgent.name} variant="openPeeps" className="w-28 h-28 rounded-full mx-auto mt-2 bg-gradient-to-r from-primary/5 to-primary/20  border-primary/20 border-[0.2px]" />
           <div className='flex items-center justify-center mt-2  flex-col'>
-          <p className='text-lg font-medium'>
+          <p className='md:text-lg text-sm font-medium'>
             <span className='uppercase font-semibold'>{mostActiveAgent.name }</span> is still here!</p>
-            <p className='text-sm font-light text-muted-foreground'>You currently have {mostActiveAgent.meetingCount} meetings with this agent</p>
+            <p className='lg:text-xs text-[10px] font-light text-muted-foreground'>You currently have {mostActiveAgent.meetingCount} meetings with this agent</p>
           </div>
-        </div>
-        <div className='flex-1 p-4 mt-4'>
-          <p className="text-sm font-medium mb-2">Meeting Duration</p>
-  <ResponsiveContainer width="100%" height={250}>
-    <BarChart data={durationBreakdown}>
-       <XAxis 
-        dataKey="range" 
-        tick={{ fontSize: 10 }}
-        angle={-45}
-        textAnchor="end"
-        height={60}
-      />
-      <Bar 
-        dataKey="count" 
-        fill="hsl(var(--primary))" 
-        radius={[4, 4, 0, 0]}
-      />
-    </BarChart>
-  </ResponsiveContainer>
         </div>
     </div>
 )}
