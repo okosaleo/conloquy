@@ -27,8 +27,8 @@ export default function HomeView() {
     <Header
 
      />
-       <div className='w-full mt-4 p-4'>
-        <h1 className="text-3xl font-semibold">Your Agents</h1>
+       <div className='w-full mt-4 p-2'>
+        <h1 className="text-2xl font-semibold mb-4">Your Agents</h1>
              <DataTable
              data={data.items} 
              columns={columns}
